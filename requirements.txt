@@ -1,0 +1,7 @@
+pandas
+numpy
+matplotlib
+pytest
+pyomo
+idaes-pse
+CoolProp
