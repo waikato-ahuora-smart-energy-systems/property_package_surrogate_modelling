@@ -42,7 +42,7 @@ inputs = data_read[input_cols]
 outputs = data_read[output_cols]
 
 # Randomly sample 100 data points from the dataset
-sampled_data = data_read.sample(n=1000, random_state=42)
+sampled_data = data_read.sample(n=10000, random_state=42)
 
 # Extract inputs and outputs from the sampled data
 inputs = sampled_data[input_cols]
@@ -76,30 +76,32 @@ def build_model():
   return model
 
 
-input_scaler = preprocessing.StandardScaler().fit(inputs)
-output_scaler = preprocessing.StandardScaler().fit(outputs)
+# input_scaler = preprocessing.StandardScaler().fit(inputs)
+# output_scaler = preprocessing.StandardScaler().fit(outputs)
 
-inputs_scaled = input_scaler.transform(inputs)
-outputs_scaled = output_scaler.transform(outputs)
+# inputs_scaled = input_scaler.transform(inputs)
+# outputs_scaled = output_scaler.transform(outputs)
 
 # Splitting into training and testing.
 # For surrogate modleling it matters little but for real data it is crucial to think it through.
 
-train_inputs, test_inputs = model_selection.train_test_split(inputs_scaled, test_size = 0.8, random_state=5)
-train_outputs, test_outputs = model_selection.train_test_split(outputs_scaled, test_size = 0.8, random_state=5)
+train_inputs, test_inputs = model_selection.train_test_split(inputs, test_size = 0.8, random_state=5)
+train_outputs, test_outputs = model_selection.train_test_split(outputs, test_size = 0.8, random_state=5)
 train_combined = pd.DataFrame(columns = input_cols+ output_cols, data = np.concatenate([train_inputs,train_outputs], axis = 1))
 test_inputs_df = pd.DataFrame(columns = input_cols,data = test_inputs)
 
 
+
 model = train_model(input_cols, output_cols, train_combined)
+modelsaved = model.save_to_file('rbf_HA.json', overwrite=True)
 model_output = test_model(model, test_inputs_df) 
 
 
-model_output = output_scaler.inverse_transform(model_output)
-test_inputs = input_scaler.inverse_transform(test_inputs)
-test_outputs = output_scaler.inverse_transform(test_outputs)
-train_inputs = input_scaler.inverse_transform(train_inputs)
-train_outputs = output_scaler.inverse_transform(train_outputs)
+# model_output = output.inverse_transform(model_output)
+# test_inputs = input_scaler.inverse_transform(test_inputs)
+# test_outputs = output_scaler.inverse_transform(test_outputs)
+# train_inputs = input_scaler.inverse_transform(train_inputs)
+# train_outputs = output_scaler.inverse_transform(train_outputs)
 
 # for PYSMO
 

@@ -36,7 +36,7 @@ from idaes.core.surrogate.pysmo_surrogate import PysmoSurrogate
 from pyomo.util.model_size import build_model_size_report
 
 # Some more information about this module
-__author__ = Ben
+__author__ = "Ben"
 
 # Set up logger
 _log = logging.getLogger(__name__)
