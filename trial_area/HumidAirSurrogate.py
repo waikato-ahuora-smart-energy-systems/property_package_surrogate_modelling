@@ -316,7 +316,7 @@ class HAirStateBlockData(StateBlockData):
         outputs = [self.mole_frac_vap_sat, self.enth_mol_vap, self.entr_mol_vap, self.vol_mol_vap]
         script_dir = os.path.dirname(__file__)
         self.pysmo_surrogate = PysmoSurrogate.load_from_file(
-            os.path.join(script_dir,"pysmo_humid_air.json")
+            os.path.join(script_dir,"rbf_HA_10000.json")
         )
         self.surrogate = SurrogateBlock()
         self.surrogate.build_model(
