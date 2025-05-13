@@ -338,6 +338,14 @@ class HAirStateBlockData(StateBlockData):
         def _flow_mass_rule(b):
             return b.flow_mol * b.ave_MW
         self.flow_mass = Expression(rule=_flow_mass_rule)
+    
+    def _mass_frac_comp(self):
+        def _rule_mass_frac_comp(b, i):
+            return b.flow_mass_comp[i] / b.flow_mass
+        self.mass_frac_comp = Expression(
+            self.params.component_list,
+            rule=_rule_mass_frac_comp,
+        )
 
     def _ave_MW(self):
         def _rule_ave_MW(b):
@@ -354,14 +362,16 @@ class HAirStateBlockData(StateBlockData):
 
     def _phase_frac_vap(self):
         def _rule_phase_frac_vap(b):
-            1 - b.phase_frac_liq
+            return 1 - b.phase_frac_liq
 
         self.phase_frac_vap = Expression(rule=_rule_phase_frac_vap)
 
     def _mole_frac_phase_comp(self):
         def _rule_mole_frac_phase_comp(b, p, i):
-            if p == "Liq":
+            if p == "Liq" and i == "water":
                 return 1
+            elif p == "Liq" and i == "air":
+                return 0
             elif p == "Vap": 
                 xw_vap = smooth_min(b.mole_frac_vap_sat, b.mole_frac_comp["water"]) 
                 total = xw_vap + b.mole_frac_comp["air"]
@@ -377,10 +387,18 @@ class HAirStateBlockData(StateBlockData):
             rule=_rule_mole_frac_phase_comp,
         )
 
+    def _flow_mass_phase_comp(self):
+        def _rule_flow_mass_phase_comp(b, p, i):
+            return b.mole_frac_phase_comp[p, i] * b.flow_mol_phase[p] * b.params.mw_comp[i]
+
+        self.flow_mass_phase_comp = Expression(
+            self.params.phase_list,
+            self.params.component_list,
+            rule=_rule_flow_mass_phase_comp,
+        )
     def _mass_frac_phase_comp(self):
-        # TODO: Check if this rule is correct
         def _rule_mass_frac_phase_comp(b, p, i):
-            return b.mole_frac_phase_comp[p, i] * b.params.mw_comp[i] / b.flow_mass_phase[p]
+            return  b.flow_mass_phase_comp[p, i] / b.flow_mass_phase[p]
 
         self.mass_frac_phase_comp = Expression(
             self.params.phase_list,
@@ -429,12 +447,30 @@ class HAirStateBlockData(StateBlockData):
         self.enth_mass_phase = Expression(
             self.params.phase_list,
             rule=_rule_enth_mass_phase,
-        )
+        ) 
 
     def _enth_mass(self):
-        def enth_mass_rule(b):
+        def _enth_mass_rule(b):
             return b.enth_mol * b.ave_MW
-        self.enth_mass = Expression (rule=enth_mass_rule)
+        self.enth_mass = Expression (rule=_enth_mass_rule)
+
+    def _enth_mass_comp(self):
+        def enth_mass_comp_rule(b, i):
+            return b.enth_mass * b.mass_frac_comp[i]
+    
+        self.enth_mass_comp = Expression(
+            self.params.component_list,
+            rule=enth_mass_comp_rule,
+        )
+    
+    def _enth_mass_phase_comp(self):
+        def enth_mass_phase_comp_rule(b, p, i):
+            return b.enth_mass_phase[p] * b.mass_frac_phase_comp[p, i]
+        self.enth_mass_phase_comp = Expression(
+            self.params.phase_list,
+            self.params.component_list,
+            rule=enth_mass_phase_comp_rule,
+        )
 
     def _enth_mol_phase(self):
         def enth_mol_phase_rule(b, p):
@@ -452,6 +488,23 @@ class HAirStateBlockData(StateBlockData):
         def enth_mol_rule(b):
             return (b.enth_mol_phase["Liq"] * b.phase_frac_liq + b.enth_mol_phase["Vap"] * b.phase_frac_vap)
         self.enth_mol = Expression (rule=enth_mol_rule)
+
+    def _enth_mol_comp(self):
+        def enth_mol_comp_rule(b, i):
+            return b.enth_mol * b.mole_frac_comp[i]
+        self.enth_mol_comp = Expression(
+            self.params.component_list,
+            rule=enth_mol_comp_rule,
+        )
+        
+    def _enth_mol_phase_comp(self):
+        def enth_mol_phase_comp_rule(b, p, i):
+            return b.enth_mol_phase[p] * b.mole_frac_phase_comp[p, i]
+        self.enth_mol_phase_comp = Expression(
+            self.params.phase_list,
+            self.params.component_list,
+            rule=enth_mol_phase_comp_rule,
+        )
 
     def _entr_mol_phase(self):
         def _rule_entr_mol_phase(b, p):
@@ -482,10 +535,43 @@ class HAirStateBlockData(StateBlockData):
             return (b.entr_mol_phase["Liq"] * b.phase_frac_liq + b.entr_mol_phase["Vap"] * b.phase_frac_vap)
         self.entr_mol = Expression (rule=_rule_entr_mol)
 
+    def _entr_mol_comp(self):
+        def _rule_entr_mol_comp(b, i):
+            return b.entr_mol * b.mole_frac_comp[i]
+        self.entr_mol_comp = Expression(
+            self.params.component_list,
+            rule=_rule_entr_mol_comp,
+        )
+    def _entr_mol_phase_comp(self):
+        def _rule_entr_mol_phase_comp(b, p, i):
+            return b.entr_mol_phase[p] * b.mole_frac_phase_comp[p, i]
+        self.entr_mol_phase_comp = Expression(
+            self.params.phase_list,
+            self.params.component_list,
+            rule=_rule_entr_mol_phase_comp,
+        )
+
     def _entr_mass(self):
         def _rule_entr_mass(b):
             return b.entr_mol * b.ave_MW
         self.entr_mass = Expression (rule=_rule_entr_mass)
+
+    def _entr_mass_comp(self):
+        def _rule_entr_mass_comp(b, i):
+            return b.entr_mass * b.mass_frac_comp[i]
+        self.entr_mass_comp = Expression(  
+            self.params.component_list,
+            rule=_rule_entr_mass_comp,
+        )
+    def _entr_mass_phase_comp(self):
+        def _rule_entr_mass_phase_comp(b, p, i):
+            return b.entr_mass_phase[p] * b.mass_frac_phase_comp[p, i]
+        self.entr_mass_phase_comp = Expression(
+            self.params.phase_list,
+            self.params.component_list,
+            rule=_rule_entr_mass_phase_comp,
+        )
+
     
     def _flow_mass_comp(self):
         def _rule_flow_mass_comp(b, i):
@@ -520,7 +606,7 @@ class HAirStateBlockData(StateBlockData):
     def _spec_vol_mol_phase(self):
         def _rule_spec_vol_phase(b, p):
             if p == "Liq":
-                return 1.80e-5 #assume constant for now
+                return 1.80e-5 * units.m**3 / units.mol #assume constant for now
             elif p == "Vap":
                 return b.vol_mol_vap
         self.spec_vol_mol_phase = Expression(
@@ -542,7 +628,7 @@ class HAirStateBlockData(StateBlockData):
     def _flow_vol(self):
         def _rule_flow_vol(b):
             return (b.flow_mol * b.phase_frac_vap * b.vol_mol_vap +
-                       b.flow_mol * b.phase_frac_liq * b.spec_vol_mass_phase["Liq"])
+                       b.flow_mol * b.phase_frac_liq * b.spec_vol_mol_phase["Liq"])
         self.flow_vol = Expression(rule=_rule_flow_vol)
 
     def _flow_mol_comp(self):
@@ -562,11 +648,6 @@ class HAirStateBlockData(StateBlockData):
         def _rule_flow_vol(b):
             return b.vol_mol_vap*b.flow_mol
         self.flow_vol = Expression(rule=_rule_flow_vol)
-
-    def _mass_frac_comp(self):
-        def _mass_frac_comp_rule(b, i):
-            return b.flow_mol_comp[i] * b.params.mw_comp[i]
-        self.mass_frac_comp = Expression ( self.params.component_list, rule = _mass_frac_comp_rule)
 
     def _total_energy_flow(self):
         def _rule_total_energy_flow(b):
@@ -740,7 +821,16 @@ class PhysicalParameterData(PhysicalParameterBlock):
                 "mass_frac_phase_comp": {"method": "_mass_frac_phase_comp"},
                 "flow_mass_phase": {"method": "_flow_mass_phase"},
                 "flow_mol_phase": {"method": "_flow_mol_phase"},
-
+                "flow_mass_phase_comp": {"method": "_flow_mass_phase_comp"},
+                "flow_mol_phase_comp": {"method": "_flow_mol_phase_comp"},
+                "entr_mol_comp": {"method": "_entr_mol_comp"},
+                "entr_mass_comp": {"method": "_entr_mass_comp"},
+                "entr_mol_phase_comp": {"method": "_entr_mol_phase_comp"},
+                "entr_mass_phase_comp": {"method": "_entr_mass_phase_comp"},
+                "enth_mol_comp": {"method": "_enth_mol_comp"},
+                "enth_mass_comp": {"method": "_enth_mass_comp"},
+                "enth_mol_phase_comp": {"method": "_enth_mol_phase_comp"},
+                "enth_mass_phase_comp": {"method": "_enth_mass_phase_comp"},
 
 
 
