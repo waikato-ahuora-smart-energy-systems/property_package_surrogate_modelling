@@ -26,9 +26,10 @@ from idaes.core import (
     VaporPhase,
     LiquidPhase,
     Component,
+    PhaseType,
 )
 from idaes.core.util.model_statistics import degrees_of_freedom
-
+from idaes.core.util.math import smooth_max, smooth_min
 from idaes.core.surrogate.surrogate_block import SurrogateBlock
 from idaes.core.surrogate.pysmo_surrogate import PysmoSurrogate
 import idaes.logger as idaeslog
@@ -38,9 +39,10 @@ from pyomo.core.base.expression import ScalarExpression, Expression, _GeneralExp
 from pyomo.core.base.var import ScalarVar, _GeneralVarData, VarData, IndexedVar, Var
 from idaes.models.properties.general_helmholtz import (
     HelmholtzParameterBlock,
-    PhaseType,
+    PhaseType as helmPhaseType,
     StateVars,
 )
+
 
 
 # Some more information about this module
@@ -326,12 +328,15 @@ class HAirStateBlockData(StateBlockData):
         )
 
         self.water_props = HelmholtzParameterBlock(
-        pure_component="h2o", phase_presentation=PhaseType.L,state_vars=StateVars.TPX
+        pure_component="h2o", phase_presentation=helmPhaseType.L,state_vars=StateVars.TPX
         )
+        # call the methods that have to be constructed automatically.
+        self._enth_mol()
+        self._entr_mol()
         
     def _flow_mass(self):
         def _flow_mass_rule(b):
-            return b.flow_mol * b.molecular_weight_average
+            return b.flow_mol * b.ave_MW
         self.flow_mass = Expression(rule=_flow_mass_rule)
 
     def _ave_MW(self):
@@ -344,10 +349,7 @@ class HAirStateBlockData(StateBlockData):
     
     def _phase_frac_liq(self):
         def _rule_phase_frac_liq(b):
-            if b.mole_frac_comp["water"] > b.mole_frac_vap_sat:
-                return b.mole_frac_comp["water"] - b.mole_frac_vap_sat
-            else:
-                return 0.0
+            return smooth_max( b.mole_frac_comp["water"] - b.mole_frac_vap_sat, 0.0)
         self.phase_frac_liq = Expression(rule=_rule_phase_frac_liq)
 
     def _phase_frac_vap(self):
@@ -361,7 +363,7 @@ class HAirStateBlockData(StateBlockData):
             if p == "Liq":
                 return 1
             elif p == "Vap": 
-                xw_vap = min(b.mole_frac_vap_sat, b.mole_frac_comp["water"]) 
+                xw_vap = smooth_min(b.mole_frac_vap_sat, b.mole_frac_comp["water"]) 
                 total = xw_vap + b.mole_frac_comp["air"]
                 if i == "water":
                     return xw_vap / total
@@ -373,6 +375,17 @@ class HAirStateBlockData(StateBlockData):
             self.params.phase_list,
             self.params.component_list,
             rule=_rule_mole_frac_phase_comp,
+        )
+
+    def _mass_frac_phase_comp(self):
+        # TODO: Check if this rule is correct
+        def _rule_mass_frac_phase_comp(b, p, i):
+            return b.mole_frac_phase_comp[p, i] * b.params.mw_comp[i] / b.flow_mass_phase[p]
+
+        self.mass_frac_phase_comp = Expression(
+            self.params.phase_list,
+            self.params.component_list,
+            rule=_rule_mass_frac_phase_comp,
         )
 
 
@@ -409,9 +422,9 @@ class HAirStateBlockData(StateBlockData):
             )
 
             if p == "Liq":
-                return b.enth_mass_phase[p] == h_w_P #Todo check reference enthalpy
+                return h_w_P #Todo check reference enthalpy
             elif p == "Vap":
-                return b.enth_mass_phase[p] == b.enth_mol_vap / b.ave_MW_vap #Todo check reference enthalpy
+                return b.enth_mol_vap / b.ave_MW_vap #Todo check reference enthalpy
 
         self.enth_mass_phase = Expression(
             self.params.phase_list,
@@ -437,15 +450,19 @@ class HAirStateBlockData(StateBlockData):
 
     def _enth_mol(self):
         def enth_mol_rule(b):
-            return sum(b.enth_mol_phase["Liq"] * b.phase_frac_liq + b.enth_mol_phase["Vap"] * b.phase_frac_vap)
+            return (b.enth_mol_phase["Liq"] * b.phase_frac_liq + b.enth_mol_phase["Vap"] * b.phase_frac_vap)
         self.enth_mol = Expression (rule=enth_mol_rule)
 
     def _entr_mol_phase(self):
-        def _rule_entr_mass_phase(b, p):
+        def _rule_entr_mol_phase(b, p):
             if p == "Liq":
-                return b.water_props.stpx(T=b.temperature, P = b.pressure) #Todo check reference enthalpy
+                return b.water_props.stpx(T=b.temperature,p = b.pressure) #Todo check reference enthalpy
             elif p == "Vap":
                 return b.entr_mol_vap #Todo check reference enthalpy
+        self.entr_mol_phase = Expression(
+            self.params.phase_list,
+            rule=_rule_entr_mol_phase,
+        )
 
     def _entr_mass_phase(self):
         def _rule_entr_mass_phase(b, p):
@@ -462,12 +479,13 @@ class HAirStateBlockData(StateBlockData):
 
     def _entr_mol(self):
         def _rule_entr_mol(b):
-            return sum(b.entr_mol_phase["Liq"] * b.phase_frac_liq + b.entr_mol_phase["Vap"] * b.phase_frac_vap)
+            return (b.entr_mol_phase["Liq"] * b.phase_frac_liq + b.entr_mol_phase["Vap"] * b.phase_frac_vap)
         self.entr_mol = Expression (rule=_rule_entr_mol)
 
     def _entr_mass(self):
         def _rule_entr_mass(b):
             return b.entr_mol * b.ave_MW
+        self.entr_mass = Expression (rule=_rule_entr_mass)
     
     def _flow_mass_comp(self):
         def _rule_flow_mass_comp(b, i):
@@ -483,6 +501,10 @@ class HAirStateBlockData(StateBlockData):
                 return b.flow_mol * b.phase_frac_liq
             elif p == "Vap":
                 return b.flow_mol * b.phase_frac_vap
+        self.flow_mol_phase = Expression(
+            self.params.phase_list,
+            rule=_rule_flow_mol_phase,
+        )
 
     def _flow_mass_phase(self):
         def _rule_flow_mass_phase(b, p):
@@ -509,9 +531,9 @@ class HAirStateBlockData(StateBlockData):
     def _spec_vol_mass_phase(self):
         def _rule_spec_vol_mass_phase(b, p):
             if p == "Liq":
-                return b.spec_vol_mol_phase / b.params.mw_comp["water"]
+                return b.spec_vol_mol_phase[p] / b.params.mw_comp["water"]
             elif p == "Vap":
-                return b.spec_vol_mol_phase / b.ave_MW_vap
+                return b.spec_vol_mol_phase[p] / b.ave_MW_vap
         self.spec_vol_mass_phase = Expression(  
             self.params.phase_list,
             rule=_rule_spec_vol_mass_phase,
@@ -519,7 +541,7 @@ class HAirStateBlockData(StateBlockData):
 
     def _flow_vol(self):
         def _rule_flow_vol(b):
-            return sum(b.flow_mol * b.phase_frac_vap * b.vol_mol_vap,
+            return (b.flow_mol * b.phase_frac_vap * b.vol_mol_vap +
                        b.flow_mol * b.phase_frac_liq * b.spec_vol_mass_phase["Liq"])
         self.flow_vol = Expression(rule=_rule_flow_vol)
 
@@ -616,12 +638,12 @@ class PhysicalParameterData(PhysicalParameterBlock):
 
         self._state_block_class = HAirStateBlock # noqa: F821
 
-        self.water = Component(valid_phase_types=["Liq", "Vap"]) #Restrict water to only be in liquid and vapor phases
-        self.air = Component(valid_phase_types=["Vap"])
+        self.water = Component(valid_phase_types=[PhaseType.liquidPhase, PhaseType.vaporPhase]) #Restrict water to only be in liquid and vapor phases
+        self.air = Component(valid_phase_types=[PhaseType.vaporPhase])
 
         # List of valid phases in property package
-        self.Vap = VaporPhase(component_list=["water", "air"])
-        self.Liq = LiquidPhase(component_list=["water"])
+        self.Vap = VaporPhase(component_list=[self.water, self.air])
+        self.Liq = LiquidPhase(component_list=[self.water])
 
         # Component list - a list of component identifiers
 
@@ -701,29 +723,42 @@ class PhysicalParameterData(PhysicalParameterBlock):
                 "flow_mass_comp": {"method": "_flow_mass_comp"},
                 "flow_vol": {"method":"_flow_vol", "units": units.m**3 / units.s},
                 "pressure": {"method": None, "units": units.Pa},
-                "vol_mol_vap" : {"method": None, "units": units.m**3 / units.mol},
-                "vol_mass": {"method": "_vol_mass", "units": units.m**3 / units.kg},
-                "enth_mol": {"method": None, "units": units.J / units.mol},
-                "enth_mol_comp": {"method": "_enth_mol_comp"},
+                "enth_mol_phase": {"method": "_enth_mol_phase"},
+                "enth_mass_phase": {"method": "_enth_mass_phase"},
                 "enth_mass": {"method": "_enth_mass", "units": units.J/units.kg},
                 "enth_mass_comp": {"method": "_enth_mass_comp"},
                 "mole_frac_comp": {"method": "_mole_frac_comp"},
                 "mass_frac_comp": {"method": "_mass_frac_comp"},
                 "entr_mol": {"method": None, "units": units.J / units.mol / units.K},
-                "entr_mol_comp": {"method": "_entr_mol_comp"},
+                "entr_mol_phase": {"method": "_entr_mol_phase"},
+                "entr_mass_phase": {"method": "_entr_mass_phase"},
                 "entr_mass": {"method": "_entr_mass", "units": units.J / units.kg / units.K},
-                "entr_mass_comp": {"method": "_entr_mass_comp"},
                 "temperature": {"method": None, "units": units.K},
-                "total_energy_flow": {"method": "_total_energy_flow", "units": units.kW},
-                # "vapor_frac": {"method": "_vapor_frac"}
+                "flow_mass_phase": {"method": "_flow_mass_phase"},
+                "flow_mol_phase": {"method": "_flow_mol_phase"},
+                "mole_frac_phase_comp": {"method": "_mole_frac_phase_comp"},
+                "mass_frac_phase_comp": {"method": "_mass_frac_phase_comp"},
+                "flow_mass_phase": {"method": "_flow_mass_phase"},
+                "flow_mol_phase": {"method": "_flow_mol_phase"},
+
+
+
 
             }
         )
 
         obj.define_custom_properties(
             {
-                "temperature_wet_bulb": {"method": None},
-                "relative_humidity": {"method": None},
+                "ave_MW": {"method": "_ave_MW", "units": units.kg / units.mol},
+                "ave_MW_vap": {"method": "_ave_MW_vap", "units": units.kg / units.mol},
+                "spec_vol_mol_phase": {"method": "_spec_vol_mol_phase"},
+                "spec_vol_mass_phase": {"method": "_spec_vol_mass_phase"},
+                "phase_frac_liq": {"method": "_phase_frac_liq"},
+                "phase_frac_vap": {"method": "_phase_frac_vap"},
+                "vol_mol_vap" : {"method": None, "units": units.m**3 / units.mol},
+                "vapor_frac": {"method": "_vapor_frac"},
+                "flow_vol_vap": {"method": "_flow_vol_vap", "units": units.m**3 / units.s},
+                "total_energy_flow": {"method": "_total_energy_flow", "units": units.kW},
             }
         )
 
