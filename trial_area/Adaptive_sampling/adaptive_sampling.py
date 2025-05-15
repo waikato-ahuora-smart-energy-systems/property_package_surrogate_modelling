@@ -23,10 +23,10 @@ def initial_sampling(data, no_samples, x_labels):
 	return samples
 
 
-def train_model_rbf(training_data, basis_function, bounds, out_var=None): 
+def train_model_rbf(training_data, basis_function, bounds, out_vars=None): 
     # Create PySMO trainer object
     input_labels = list(bounds.keys()) 
-    output_labels = ['CACO3'] if out_var is None else [out_var]
+    output_labels = ['CACO3'] if out_vars is None else out_vars
     carbonation_trainer_2 = PysmoRBFTrainer(input_labels=input_labels,
                             output_labels=output_labels,
                             training_dataframe = training_data)
@@ -63,36 +63,51 @@ def train_model_kriging(training_data, bounds, out_var=None):
 
 
 def compute_metrics(model, data, out_var=None):
-	"""
-	Computes standard metrics
-	"""
-	var = 'CACO3' if out_var is None else out_var
-	surrogate_models = [model]
-	res_names = []
-	for m in range(0, len(surrogate_models)):
-	    err = compute_fit_metrics(surrogate_models[m], data)
-	    err = pd.DataFrame.from_dict(err)
-	    # print(err)
-	    # res_names.append(err)
-	    print('\nModel metrics: R2 =', err[var]['R2'], 'maxAE =', err[var]['maxAE'], '\n')
+    """
+    Computes standard metrics
+    """
+    var = 'CACO3' if out_var is None else out_var
+    surrogate_models = [model]
+    res_names = []
+    print("HIIII")
+    for m in range(0, len(surrogate_models)):
+        err = compute_fit_metrics(surrogate_models[m], data)
+        
+        errDF = pd.DataFrame.from_dict(err)
+        # print(err)
+        # res_names.append(err)
+        lowest_r2 = 1
+        for entry in var:
+             
+            print('\nModel metrics: R2 =', errDF[entry]['R2'], 'maxAE =', errDF[entry]['maxAE'], '\n')
+            if errDF[entry]['R2'] < lowest_r2:
+                lowest_r2 = errDF[entry]['R2']
+                lowest_r2_var = entry
+                print('Lowest R2 variable:', lowest_r2_var)
+                print('Lowest R2 value:', lowest_r2)
+        
 
+        return lowest_r2_var
 
-def determine_additional_point(model, data, existing, out_var=None):
-	"""
-	Determines and adds worst fit point (based on absolute error) to the training data.
-	"""
-	ms_data_mod = data.copy()
-	# Drop columns already in training set - no point should exist in training set more than once.
-	var = 'CACO3' if out_var is None else out_var
-	unused_indexes = ms_data_mod.round(4).merge(existing.round(4),how='left',indicator=True).loc[lambda x : x['_merge']=='left_only'].index
-	ms_data_mod = ms_data_mod.iloc[unused_indexes]
-	pred_values = model.evaluate_surrogate(ms_data_mod)
-	ms_data_mod['RBF'] = pred_values
-	ms_data_mod['abs_error'] = abs(ms_data_mod['RBF'] - ms_data_mod[var])
-	max_error_index = ms_data_mod['abs_error'].idxmax()
-	print('Largest absolute deviation:', ms_data_mod['abs_error'].max())
-	print('Row of interest:\n', ms_data_mod[ms_data_mod['abs_error']==ms_data_mod['abs_error'].max()])
-	return max_error_index
+        
+def determine_additional_point(model, data, existing, out_var=None,worst_fit=None):
+    """
+    Determines and adds worst fit point (based on absolute error) to the training data.
+    """
+    ms_data_mod = data.copy()
+    # Drop columns already in training set - no point should exist in training set more than once.
+    var = 'CACO3' if out_var is None else out_var
+    unused_indexes = ms_data_mod.round(4).merge(existing.round(4),how='left',indicator=True).loc[lambda x : x['_merge']=='left_only'].index
+    ms_data_mod = ms_data_mod.iloc[unused_indexes]
+    pred_values = model.evaluate_surrogate(ms_data_mod)
+
+    series = pd.Series(pred_values[worst_fit])
+    ms_data_mod['RBF'] = series
+    ms_data_mod['abs_error'] = abs(ms_data_mod['RBF'] - ms_data_mod[worst_fit])
+    max_error_index = ms_data_mod['abs_error'].idxmax()
+    print('Largest absolute deviation:', ms_data_mod['abs_error'].max())
+    print('Row of interest:\n', ms_data_mod[ms_data_mod['abs_error']==ms_data_mod['abs_error'].max()])
+    return max_error_index
 
 
 def compute_ic_metrics(model, data, plot=False, out_var=None):
@@ -169,7 +184,7 @@ def scaling_adaptive_sampling_function(dataset, out_var, input_labels, input_bou
     """
     ms_data = dataset
     ms_data_filter = ms_data[ms_data[out_var] < scaling_cutoff]
-    ms_data_filter = ms_data_filter[ms_data_filter['RO_recovery'] <= recovery_cutoff]
+    #ms_data_filter = ms_data_filter[ms_data_filter['RO_recovery'] <= recovery_cutoff]
     ms_data_filter.reset_index(drop=True, inplace=True)
 
     # Create tight data with values supplied by user
