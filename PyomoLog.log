@@ -1,0 +1,27 @@
+ERROR:idaes.core.base.process_block:Failure in build: fs.state
+Traceback (most recent call last):
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\idaes\core\base\process_block.py", line 41, in _rule_default
+    b.build()
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\idaes\models\properties\general_helmholtz\helmholtz_state.py", line 596, in build
+    super().build(*args)
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\idaes\core\base\property_base.py", line 614, in build
+    super(StateBlockData, self).build()
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\idaes\core\base\process_base.py", line 130, in build
+    self._get_config_args()
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\idaes\core\base\process_base.py", line 251, in _get_config_args
+    self.config = self.CONFIG(kwargs)
+                  ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\pyomo\common\config.py", line 1875, in __call__
+    ans.set_value(value)
+  File "C:\Users\bjl25\.conda\envs\my-IDAES-env\Lib\site-packages\pyomo\common\config.py", line 2873, in set_value
+    raise ValueError(
+ValueError: key 'define_state' not defined for ConfigDict '' and implicit (undefined) keys are not allowed
+ERROR:pyomo.core:Constructing component 'fs.state' from data=None failed:
+    ValueError: key 'define_state' not defined for ConfigDict '' and implicit (undefined) keys are not allowed
+WARNING:idaes.models.properties.general_helmholtz.helmholtz_state:Helmholtz EoS packages using Mixed phase representation ignore the 'has_phase_equilibrium' configuration argument. However, setting this to True can result in errors when constructing material balances due to only having a single phase (thus phase transfer terms cannot be constructed).
+WARNING:idaes.models.properties.general_helmholtz.helmholtz_state:Helmholtz EoS packages using Mixed phase representation ignore the 'has_phase_equilibrium' configuration argument. However, setting this to True can result in errors when constructing material balances due to only having a single phase (thus phase transfer terms cannot be constructed).
+WARNING:idaes.models.properties.general_helmholtz.helmholtz_state:Helmholtz EoS packages using Mixed phase representation ignore the 'has_phase_equilibrium' configuration argument. However, setting this to True can result in errors when constructing material balances due to only having a single phase (thus phase transfer terms cannot be constructed).
+WARNING:pyomo.core:Setting Var 'fs.state.temperature' to a numeric value `25` outside the bounds (130.0, 450.0).
+WARNING:idaes.models.properties.general_helmholtz.helmholtz_state:Helmholtz EoS packages using Mixed phase representation ignore the 'has_phase_equilibrium' configuration argument. However, setting this to True can result in errors when constructing material balances due to only having a single phase (thus phase transfer terms cannot be constructed).
+WARNING:pyomo.core:Setting Var 'fs.state.temperature' to a numeric value `25` outside the bounds (70.0, 700.0).
+WARNING:idaes.models.properties.general_helmholtz.helmholtz_state:Helmholtz EoS packages using Mixed phase representation ignore the 'has_phase_equilibrium' configuration argument. However, setting this to True can result in errors when constructing material balances due to only having a single phase (thus phase transfer terms cannot be constructed).
