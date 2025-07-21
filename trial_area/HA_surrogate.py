@@ -25,24 +25,25 @@ from scipy.integrate import simpson
 
 from idaes.core.surrogate.pysmo import polynomial_regression, radial_basis_function
 from idaes.core.surrogate.pysmo_surrogate import PysmoPolyTrainer
-from idaes.core.surrogate.pysmo_surrogate import PysmoRBFTrainer, PysmoSurrogate
+from idaes.core.surrogate.pysmo_surrogate import PysmoRBFTrainer, PysmoSurrogate, PysmoKrigingTrainer
 from idaes.core.surrogate.plotting.sm_plotter import (
     surrogate_scatter2D, surrogate_parity, surrogate_residual,
 )
 
 
-data_read = pd.read_csv(r'c:/Users/bjl25/Documents/property_package_surrogate_modelling/trial_area/humid_air_props_data.csv')
+data_read = pd.read_csv(r'humid_air_props_data_full.csv')
 
 input_cols = ['T_DB (K)','P (Pa)','x_w (mol/mol)']
 
 output_cols = ['x_w_sat(mol/hmol)','h_gas (J/mol)','s_gas (J/mol/K)','v_gas (m3/mol)']
+# output_cols = ['x_w_sat(mol/hmol)']
 # output_cols = ['Work_Mechanical']
 
 inputs = data_read[input_cols]
 outputs = data_read[output_cols]
 
 # Randomly sample 100 data points from the dataset
-sampled_data = data_read.sample(n=10000, random_state=42)
+sampled_data = data_read.sample(n=1000, random_state=42)
 
 # Extract inputs and outputs from the sampled data
 inputs = sampled_data[input_cols]
@@ -58,10 +59,31 @@ outputs = outputs[na_inx]
 # Returns a trained model
 def train_model(input_cols, output_cols, train_df, verbose = True):
   # Create the RBF trainer object
-  rbf_trainer = PysmoRBFTrainer(input_labels=input_cols, output_labels=output_cols, training_dataframe = train_df)
-  rbf_trainer.config.basis_function = 'gaussian'
-  rbf_train = rbf_trainer.train_surrogate()
-  surr = PysmoSurrogate(rbf_train, input_cols, output_cols)
+  # rbf_trainer = PysmoRBFTrainer(input_labels=input_cols, output_labels=output_cols, training_dataframe = train_df)
+  # rbf_trainer.config.basis_function = 'gaussian'
+  # rbf_train = rbf_trainer.train_surrogate()
+  # surr = PysmoSurrogate(rbf_train, input_cols, output_cols)
+
+#   pr_trainer = PysmoPolyTrainer(input_labels=input_cols, output_labels=output_cols, training_dataframe = train_df)
+
+# # Set PySMO options
+#   pr_trainer.config.maximum_polynomial_order = 4
+
+# # Train the model
+#   poly_train = pr_trainer.train_surrogate()
+
+#   input_bounds = {col: (train_df[col].min(), train_df[col].max()) for col in input_cols}
+#   surr = PysmoSurrogate(poly_train, input_cols, output_cols, input_bounds)
+
+# Create the Kriging trainer object
+  krg_trainer = PysmoKrigingTrainer(input_labels=input_cols, output_labels=output_cols, training_dataframe = train_df)
+
+# Set desired PySMO kriging options
+  krg_trainer.config.numerical_gradients = False
+
+# Train the model
+  krg_train = krg_trainer.train_surrogate()
+  surr = PysmoSurrogate(krg_train, input_cols, output_cols)
 
   return surr
 
